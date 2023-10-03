@@ -45,7 +45,6 @@ from diffusers.models.attention_processor import (
     LoRAAttnProcessor2_0,
     SlicedAttnAddedKVProcessor,
 )
-from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
@@ -55,17 +54,19 @@ check_min_version("0.20.1")
 
 logger = get_logger(__name__)
 
-def make_mask(images, resolution):
+def make_mask(images, resolution, times=10):
     mask = torch.ones_like(images[0:1, :, :])
     min_size, max_size, margin = np.array([0.06, 0.2, 0.02]) * resolution
 
-    width = np.random.randint(int(min_size), int(max_size))
-    height = np.random.randint(int(min_size), int(max_size))
+    for _ in range(times):
+        width = np.random.randint(int(min_size), int(max_size))
+        height = np.random.randint(int(min_size), int(max_size))
 
-    x_start = np.random.randint(int(margin), resolution - int(margin) - width + 1)
-    y_start = np.random.randint(int(margin), resolution - int(margin) - height + 1)
-    
-    mask[y_start:y_start + height, x_start:x_start + width] = 0
+        x_start = np.random.randint(int(margin), resolution - int(margin) - width + 1)
+        y_start = np.random.randint(int(margin), resolution - int(margin) - height + 1)
+        mask[y_start:y_start + height, x_start:x_start + width] = 0
+
+    mask = 1 - mask if random.random() < 0.5 else mask
     return mask
 
 def save_model_card(
@@ -143,20 +144,24 @@ def log_validation(
         if image.mode != "RGB":
             image = image.convert("RGB")
 
-        image = pipeline("A photo of sks", image=image, mask_image=mask_image, generator=generator).images[0]
-        images.append(image)
+        images.append([])
+        for _ in range(args.num_validation_images):
+            image = pipeline("A photo of sks", image=image, mask_image=mask_image, generator=generator).images[0]
+            images[-1].append(image)
 
     for tracker in accelerator.trackers:
         if tracker.name == "tensorboard":
-            np_images = np.stack([np.asarray(img) for img in images])
-            tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
+            for index, sub_images in enumerate(images):
+                np_images = np.stack([np.asarray(img) for img in sub_images])
+                tracker.writer.add_images(f"validation - {index}", np_images, epoch, dataformats="NHWC")
         if tracker.name == "wandb":
-            tracker.log(
-                {
-                    "validation": [
-                        wandb.Image(image, caption=str(i)) for i, image in enumerate(images)
-                    ]
-                }
+            for index, sub_images in enumerate(images):
+                tracker.log(
+                    {
+                        f"validation - {index}": [
+                            wandb.Image(image, caption=str(i)) for i, image in enumerate(sub_images)
+                        ]
+                    }
             )
 
     del pipeline
@@ -287,10 +292,16 @@ def parse_args(input_args=None):
         help="Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.",
     )
     parser.add_argument(
-        "--learning_rate",
+        "--unet_learning_rate",
         type=float,
-        default=5e-6,
-        help="Initial learning rate (after the potential warmup period) to use.",
+        default=2e-4,
+        help="Learning rate to use for unet.",
+    )
+    parser.add_argument(
+        "--text_encoder_learning_rate",
+        type=float,
+        default=4e-5,
+        help="Learning rate to use for text encoder.",
     )
     parser.add_argument(
         "--scale_lr",
@@ -298,25 +309,6 @@ def parse_args(input_args=None):
         default=False,
         help="Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
     )
-    parser.add_argument(
-        "--lr_scheduler",
-        type=str,
-        default="constant",
-        help=(
-            'The scheduler type to use. Choose between ["linear", "cosine", "cosine_with_restarts", "polynomial",'
-            ' "constant", "constant_with_warmup"]'
-        ),
-    )
-    parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
-    )
-    parser.add_argument(
-        "--lr_num_cycles",
-        type=int,
-        default=1,
-        help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
-    )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
     parser.add_argument(
         "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
     )
@@ -389,7 +381,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--rank",
         type=int,
-        default=4,
+        default=8,
         help=("The dimension of the LoRA update matrices."),
     )
 
@@ -456,11 +448,16 @@ class RealFillDataset(Dataset):
             image = image.convert("RGB")
         example["images"] = self.image_transforms(image)
 
-        example["masks"] = make_mask(example["images"], self.size)
+        if random.random() < 0.1:
+            example["masks"] = torch.ones_like(example["images"][0:1, :, :])
+        else:
+            example["masks"] = make_mask(example["images"], self.size)
+        
         example["conditioning_images"] = example["images"] * (example["masks"] < 0.5) 
         
+        train_prompt = "" if random.random() < 0.1 else self.train_prompt
         example["prompt_ids"] = self.tokenizer(
-            self.train_prompt,
+            train_prompt,
             truncation=True,
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
@@ -700,8 +697,12 @@ def main(args):
         torch.backends.cuda.matmul.allow_tf32 = True
 
     if args.scale_lr:
-        args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+        args.unet_learning_rate = (
+            args.unet_learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+        )
+
+        args.text_encoder_learning_rate = (
+            args.text_encoder_learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -718,12 +719,11 @@ def main(args):
         optimizer_class = torch.optim.AdamW
 
     # Optimizer creation
-    params_to_optimize = (
-        itertools.chain(unet_lora_parameters, text_encoder_lora_parameters)
-    )
     optimizer = optimizer_class(
-        params_to_optimize,
-        lr=args.learning_rate,
+        [
+            {"params": unet_lora_parameters, "lr": args.unet_learning_rate},
+            {"params": text_encoder_lora_parameters, "lr": args.text_encoder_learning_rate}
+        ],
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
@@ -752,18 +752,9 @@ def main(args):
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
 
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
-        num_cycles=args.lr_num_cycles,
-        power=args.lr_power,
-    )
-
     # Prepare everything with our `accelerator`.
-    unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        unet, text_encoder, optimizer, train_dataloader, lr_scheduler
+    unet, text_encoder, optimizer, train_dataloader = accelerator.prepare(
+        unet, text_encoder, optimizer, train_dataloader
     )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
@@ -880,7 +871,6 @@ def main(args):
                     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 
                 optimizer.step()
-                lr_scheduler.step()
                 optimizer.zero_grad()
 
             # Checks if the accelerator has performed an optimization step behind the scenes
@@ -928,7 +918,7 @@ def main(args):
                             global_step,
                         )
             
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+            logs = {"loss": loss.detach().item()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
 
