@@ -917,7 +917,7 @@ def main(args):
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
-                    if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+                    if args.validation_images is not None and epoch % args.validation_epochs == 0:
                         log_validation(
                             text_encoder,
                             tokenizer,
@@ -954,7 +954,7 @@ def main(args):
         )
 
         # Final inference
-        if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+        if args.validation_images is not None and epoch % args.validation_epochs == 0:
             images = log_validation(
                 text_encoder,
                 tokenizer,
