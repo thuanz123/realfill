@@ -56,7 +56,7 @@ check_min_version("0.20.1")
 logger = get_logger(__name__)
 
 def make_mask(images, resolution):
-    mask = torch.ones_like(images)
+    mask = torch.ones_like(images[0, :, :])
     min_size, max_size, margin = np.array([0.06, 0.2, 0.02]) * resolution
 
     width = np.random.randint(int(min_size), int(max_size))
@@ -844,7 +844,7 @@ def main(args):
                 conditionings = vae.encode(batch["conditioning_images"].to(dtype=weight_dtype)).latent_dist.sample()
                 conditionings = conditionings * 0.18215
 
-                masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2:3]
+                masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2]
                 masks = torch.nn.functional.interpolate(masks, size=size)
 
                 # Sample noise that we'll add to the latents
