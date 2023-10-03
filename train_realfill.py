@@ -217,7 +217,7 @@ def parse_args(input_args=None):
         help="Number of images that should be generated during validation with `validation_conditioning`.",
     )
     parser.add_argument(
-        "--validation_epochs",
+        "--validation_steps",
         type=int,
         default=100,
         help=(
@@ -835,7 +835,7 @@ def main(args):
         unet.train()
         text_encoder.train()
             
-        for _, batch in enumerate(train_dataloader):
+        for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet, text_encoder):
                 # Convert images to latent space
                 latents = vae.encode(batch["images"].to(dtype=weight_dtype)).latent_dist.sample()
@@ -845,7 +845,7 @@ def main(args):
                 conditionings = conditionings * 0.18215
 
                 masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2]
-                masks = torch.nn.functional.interpolate(masks, size=size)
+                masks = F.interpolate(masks, size=size)
 
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
@@ -917,7 +917,7 @@ def main(args):
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
-                    if args.validation_images is not None and epoch % args.validation_epochs == 0:
+                    if args.validation_images is not None and global_step % args.validation_steps == 0:
                         log_validation(
                             text_encoder,
                             tokenizer,
@@ -926,7 +926,7 @@ def main(args):
                             args,
                             accelerator,
                             weight_dtype,
-                            epoch,
+                            global_step,
                         )
             
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
@@ -954,7 +954,7 @@ def main(args):
         )
 
         # Final inference
-        if args.validation_images is not None and epoch % args.validation_epochs == 0:
+        if args.validation_images is not None:
             images = log_validation(
                 text_encoder,
                 tokenizer,
@@ -963,7 +963,7 @@ def main(args):
                 args,
                 accelerator,
                 weight_dtype,
-                epoch,
+                global_step,
             )
 
         if args.push_to_hub:
