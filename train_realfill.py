@@ -15,7 +15,7 @@ import torch.utils.checkpoint
 import transformers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from accelerate.utils import ProjectConfiguration, set_seed
+from accelerate.utils import set_seed
 from huggingface_hub import create_repo, upload_folder
 from packaging import version
 from PIL import Image
@@ -23,7 +23,7 @@ from PIL.ImageOps import exif_transpose
 from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer, PretrainedConfig, CLIPTextModel
+from transformers import AutoTokenizer, CLIPTextModel
 
 import diffusers
 from diffusers import (
@@ -196,6 +196,7 @@ def parse_args(input_args=None):
     )
     parser.add_argument(
         "--validation_images",
+        type=str,
         required=False,
         default=None,
         nargs="+",
@@ -203,6 +204,7 @@ def parse_args(input_args=None):
     )
     parser.add_argument(
         "--validation_masks",
+        type=str,
         required=False,
         default=None,
         nargs="+",
@@ -386,15 +388,6 @@ def parse_args(input_args=None):
         "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
     )
     parser.add_argument(
-        "--set_grads_to_none",
-        action="store_true",
-        help=(
-            "Save more memory by using setting grads to None instead of zero. Be aware, that this changes certain"
-            " behaviors, so disable this argument if it causes any problems. More info:"
-            " https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html"
-        ),
-    )
-    parser.add_argument(
         "--rank",
         type=int,
         default=4,
@@ -410,8 +403,8 @@ def parse_args(input_args=None):
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
-    if args.validation_image is not None:
-        assert args.validation_mask is not None
+    if args.validation_images is not None:
+        assert args.validation_masks is not None
 
     return args
 
@@ -464,7 +457,7 @@ class RealFillDataset(Dataset):
             image = image.convert("RGB")
         example["images"] = self.image_transforms(image)
 
-        example["mask"] = make_mask(example["images"], self.resolution)
+        example["mask"] = make_mask(example["images"], self.size)
         example["conditioning_images"] = example["images"] * (example["mask"] < 0.5) 
         
         example["prompt_ids"] = self.tokenizer(
@@ -481,14 +474,25 @@ def collate_fn(examples):
     input_ids = [example["prompt_ids"] for example in examples]
     images = [example["images"] for example in examples]
 
+    masks = [example["masks"] for example in examples]
+    conditioning_images = [example["conditioning_images"] for example in examples]
+
     images = torch.stack(images)
     images = images.to(memory_format=torch.contiguous_format).float()
+
+    masks = torch.stack(masks)
+    masks = masks.to(memory_format=torch.contiguous_format).float()
+
+    conditioning_images = torch.stack(images)
+    conditioning_images = conditioning_images.to(memory_format=torch.contiguous_format).float()
 
     input_ids = torch.cat(input_ids, dim=0)
 
     batch = {
         "input_ids": input_ids,
         "images": images,
+        "masks": masks,
+        "conditioning_images": conditioning_images,
     }
     return batch
 
@@ -509,15 +513,14 @@ def unet_attn_processors_state_dict(unet):
 
 def main(args):
     logging_dir = Path(args.output_dir, args.logging_dir)
-
-    accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=logging_dir)
-
+    
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
-        project_dir=accelerator_project_config,
+        project_dir=logging_dir,
     )
+    
     if args.report_to == "wandb":
         if not is_wandb_available():
             raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
@@ -776,7 +779,8 @@ def main(args):
     if accelerator.is_main_process:
         tracker_config = vars(copy.deepcopy(args))
         tracker_config.pop("validation_images")
-        accelerator.init_trackers("realfill", config=vars(args))
+        tracker_config.pop("validation_masks")
+        accelerator.init_trackers("realfill", config=tracker_config)
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
@@ -878,7 +882,7 @@ def main(args):
                 
                 optimizer.step()
                 lr_scheduler.step()
-                optimizer.zero_grad(set_to_none=args.set_grads_to_none)
+                optimizer.zero_grad()
 
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
