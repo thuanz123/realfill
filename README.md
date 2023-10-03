@@ -57,8 +57,8 @@ You only have to launch the training using:
 export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
 export TRAIN_DIR="data/train"
 export OUTPUT_DIR="brandenburg-model"
-export VALIDATION_IMAGES="data/val/05.png"
-export VALIDATION_MASKS="data/val/mask_05.png"
+export VALIDATION_IMAGES="data/val/05.jpg"
+export VALIDATION_MASKS="data/val/mask_05.jpg"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
@@ -86,8 +86,8 @@ It is possible to run realfill on a low-memory GPU by using the following optimi
 export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
 export TRAIN_DIR="data/train"
 export OUTPUT_DIR="brandenburg-model"
-export VALIDATION_IMAGES="data/val/05.png"
-export VALIDATION_MASKS="data/val/mask_05.png"
+export VALIDATION_IMAGES="data/val/05.jpg"
+export VALIDATION_MASKS="data/val/mask_05.jpg"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
