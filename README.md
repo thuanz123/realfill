@@ -1,4 +1,4 @@
-# RealFill(WIP)
+# RealFill (WIP)
 
 [RealFill](https://arxiv.org/abs/2309.16668) is a method to personalize text2image inpainting models like stable diffusion inpainting given just a few(3~5) images of a scene.
 The `train_realfill.py` script shows how to implement the training procedure and adapt it for stable diffusion.
@@ -107,7 +107,7 @@ accelerate launch train_realfill.py \
 
 ### Training with gradient checkpointing and 8-bit optimizers:
 
-With the help of gradient checkpointing and the 8-bit optimizer from bitsandbytes it's possible to run train dreambooth on a 16GB GPU.
+With the help of gradient checkpointing and the 8-bit optimizer from bitsandbytes it's possible to run train realfill on a 16GB GPU.
 
 To install `bitsandbytes` please refer to this [readme](https://github.com/TimDettmers/bitsandbytes#requirements--installation).
 
@@ -121,3 +121,6 @@ You can also use Dreambooth to train the specialized in-painting model. See [the
 To save even more memory, pass the `--set_grads_to_none` argument to the script. This will set grads to None instead of zero. However, be aware that it changes certain behaviors, so if you start experiencing any problems, remove this argument.
 
 More info: https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html
+
+## Acknowledge
+This repo is built upon the code of DreamBooth from diffusers and we thank the developers for their great works and efforts to release source code. Furthermore, a special "thank you" to RealFill's author for publishing such an amazing work.
