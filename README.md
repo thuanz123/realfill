@@ -61,15 +61,14 @@ export VALIDATION_IMAGES="data/val/05.jpg"
 export VALIDATION_MASKS="data/val/mask_05.jpg"
 
 accelerate launch train_realfill.py \
-  --pretrained_model_name_or_path=$MODEL_NAME  \
+  --pretrained_model_name_or_path=$MODEL_NAME \
   --train_data_dir=$TRAIN_DIR \
   --output_dir=$OUTPUT_DIR \
   --resolution=512 \
-  --train_batch_size=1 \
+  --train_batch_size=4 \
   --gradient_accumulation_steps=1 \
-  --learning_rate=5e-6 \
-  --lr_scheduler="constant" \
-  --lr_warmup_steps=0 \
+  --unet_learning_rate=2e-4 \
+  --text_encoder_learning_rate=4e-5 \
   --max_train_steps=400 \
   --validation_images=$VALIDATION_IMAGES \
   --validation_masks=$VALIDATION_MASKS \
@@ -90,18 +89,17 @@ export VALIDATION_IMAGES="data/val/05.jpg"
 export VALIDATION_MASKS="data/val/mask_05.jpg"
 
 accelerate launch train_realfill.py \
-  --pretrained_model_name_or_path=$MODEL_NAME  \
+  --pretrained_model_name_or_path=$MODEL_NAME \
   --train_data_dir=$TRAIN_DIR \
   --output_dir=$OUTPUT_DIR \
   --resolution=512 \
-  --train_batch_size=1 \
+  --train_batch_size=4 \
   --gradient_accumulation_steps=1 --gradient_checkpointing \
   --use_8bit_adam \
   --enable_xformers_memory_efficient_attention \
   --set_grads_to_none \
-  --learning_rate=5e-6 \
-  --lr_scheduler="constant" \
-  --lr_warmup_steps=0 \
+  --unet_learning_rate=2e-4 \
+  --text_encoder_learning_rate=4e-5 \
   --max_train_steps=400 \
   --validation_images=$VALIDATION_IMAGES \
   --validation_masks=$VALIDATION_MASKS \
