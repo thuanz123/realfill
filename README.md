@@ -76,7 +76,7 @@ accelerate launch train_realfill.py \
 
 ### Training on a low-memory GPU:
 
-It is possible to run dreambooth on a low-memory GPU by using the following optimizations:
+It is possible to run realfill on a low-memory GPU by using the following optimizations:
 - [gradient checkpointing and the 8-bit optimizer](#training-with-gradient-checkpointing-and-8-bit-optimizers)
 - [xformers](#training-with-xformers)
 - [setting grads to none](#set-grads-to-none)
