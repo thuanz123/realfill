@@ -483,7 +483,7 @@ def collate_fn(examples):
     masks = torch.stack(masks)
     masks = masks.to(memory_format=torch.contiguous_format).float()
 
-    conditioning_images = torch.stack(images)
+    conditioning_images = torch.stack(conditioning_images)
     conditioning_images = conditioning_images.to(memory_format=torch.contiguous_format).float()
 
     input_ids = torch.cat(input_ids, dim=0)
