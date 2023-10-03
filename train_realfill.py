@@ -457,8 +457,8 @@ class RealFillDataset(Dataset):
             image = image.convert("RGB")
         example["images"] = self.image_transforms(image)
 
-        example["mask"] = make_mask(example["images"], self.size)
-        example["conditioning_images"] = example["images"] * (example["mask"] < 0.5) 
+        example["masks"] = make_mask(example["images"], self.size)
+        example["conditioning_images"] = example["images"] * (example["masks"] < 0.5) 
         
         example["prompt_ids"] = self.tokenizer(
             self.train_prompt,
