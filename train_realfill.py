@@ -64,9 +64,8 @@ def make_mask(images, resolution):
 
     x_start = np.random.randint(int(margin), resolution - int(margin) - width + 1)
     y_start = np.random.randint(int(margin), resolution - int(margin) - height + 1)
+    
     mask[y_start:y_start + height, x_start:x_start + width] = 0
-
-    mask = 1 - mask if random.random() < 0.5 else mask
     return mask
 
 def save_model_card(
