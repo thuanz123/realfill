@@ -58,7 +58,7 @@ export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
 export TRAIN_DIR="data/train"
 export OUTPUT_DIR="brandenburg-model"
 export VALIDATION_IMAGES="data/val/05.png"
-export VALIDATION_IMAGES="data/val/mask_05.png"
+export VALIDATION_MASKS="data/val/mask_05.png"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
@@ -72,6 +72,7 @@ accelerate launch train_realfill.py \
   --lr_warmup_steps=0 \
   --max_train_steps=400 \
   --validation_images=$VALIDATION_IMAGES \
+  --validation_masks=$VALIDATION_MASKS \
 ```
 
 ### Training on a low-memory GPU:
@@ -86,7 +87,7 @@ export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
 export TRAIN_DIR="data/train"
 export OUTPUT_DIR="brandenburg-model"
 export VALIDATION_IMAGES="data/val/05.png"
-export VALIDATION_IMAGES="data/val/mask_05.png"
+export VALIDATION_MASKS="data/val/mask_05.png"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
@@ -103,6 +104,7 @@ accelerate launch train_realfill.py \
   --lr_warmup_steps=0 \
   --max_train_steps=400 \
   --validation_images=$VALIDATION_IMAGES \
+  --validation_masks=$VALIDATION_MASKS \
 ```
 
 ### Training with gradient checkpointing and 8-bit optimizers:
