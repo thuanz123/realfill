@@ -71,7 +71,7 @@ accelerate launch train_realfill.py \
   --lr_scheduler="constant" \
   --lr_warmup_steps=0 \
   --max_train_steps=400 \
-  --validation_images $VALIDATION_IMAGES \
+  --validation_images=$VALIDATION_IMAGES \
 ```
 
 ### Training on a low-memory GPU:
@@ -102,7 +102,7 @@ accelerate launch train_realfill.py \
   --lr_scheduler="constant" \
   --lr_warmup_steps=0 \
   --max_train_steps=400 \
-  --validation_images $VALIDATION_IMAGES \
+  --validation_images=$VALIDATION_IMAGES \
 ```
 
 ### Training with gradient checkpointing and 8-bit optimizers:
@@ -112,9 +112,7 @@ With the help of gradient checkpointing and the 8-bit optimizer from bitsandbyte
 To install `bitsandbytes` please refer to this [readme](https://github.com/TimDettmers/bitsandbytes#requirements--installation).
 
 ### Training with xformers:
-You can enable memory efficient attention by [installing xFormers](https://github.com/facebookresearch/xformers#installing-xformers) and padding the `--enable_xformers_memory_efficient_attention` argument to the script. This is not available with the Flax/JAX implementation.
-
-You can also use Dreambooth to train the specialized in-painting model. See [the script in the research folder for details](https://github.com/huggingface/diffusers/tree/main/examples/research_projects/dreambooth_inpaint).
+You can enable memory efficient attention by [installing xFormers](https://github.com/facebookresearch/xformers#installing-xformers) and padding the `--enable_xformers_memory_efficient_attention` argument to the script.
 
 ### Set grads to none
 
@@ -123,4 +121,4 @@ To save even more memory, pass the `--set_grads_to_none` argument to the script.
 More info: https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html
 
 ## Acknowledge
-This repo is built upon the code of DreamBooth from diffusers and we thank the developers for their great works and efforts to release source code. Furthermore, a special "thank you" to RealFill's author for publishing such an amazing work.
+This repo is built upon the code of DreamBooth from diffusers and we thank the developers for their great works and efforts to release source code. Furthermore, a special "thank you" to RealFill's authors for publishing such an amazing work.
