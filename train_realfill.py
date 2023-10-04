@@ -86,8 +86,8 @@ license: creativeml-openrail-m
 base_model: {base_model}
 prompt: "A photo of sks" 
 tags:
-- {'stable-diffusion-inpainting'}
-- {'stable-diffusion-inpainting-diffusers'}
+- stable-diffusion-inpainting
+- stable-diffusion-inpainting-diffusers
 - text-to-image
 - diffusers
 - realfill 
