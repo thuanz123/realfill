@@ -55,7 +55,7 @@ check_min_version("0.20.1")
 logger = get_logger(__name__)
 
 def make_mask(images, resolution, times=10):
-    mask, times = torch.ones_like(images[0:1, :, :]), np.random.randint(times)
+    mask, times = torch.ones_like(images[0:1, :, :]), np.random.randint(1, times)
     min_size, max_size, margin = np.array([0.06, 0.2, 0.02]) * resolution
 
     for _ in range(times):
