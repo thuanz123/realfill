@@ -665,11 +665,6 @@ def main(args):
             load_model = model_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder=sub_dir)
             load_model = PeftModel.from_pretrained(load_model, input_dir, subfolder=sub_dir)
 
-            if isinstance(model.base_model.model, type(accelerator.unwrap_model(text_encoder))):
-                model.base_model.model.config = load_model.base_model.model.config
-            else:
-                model.base_model.model.register_to_config(**load_model.base_model.model.config)
-
             model.load_state_dict(load_model.state_dict())
             del load_model
 
