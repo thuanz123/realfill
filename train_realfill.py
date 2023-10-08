@@ -660,8 +660,8 @@ def main(args):
             # pop models so that they are not loaded again
             model = models.pop()
 
-            sub_dir = "unet" if isinstance(model, type(accelerator.unwrap_model(unet))) else "text_encoder"
-            model_cls = UNet2DConditionModel if isinstance(model, type(accelerator.unwrap_model(unet))) else CLIPTextModel
+            sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else "text_encoder"
+            model_cls = UNet2DConditionModel if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else CLIPTextModel
             
             load_model = model_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder=sub_dir)
             load_model = PeftModel.from_pretrained(load_model, input_dir, subfolder=sub_dir)
