@@ -46,7 +46,7 @@ check_min_version("0.20.1")
 logger = get_logger(__name__)
 
 def make_mask(images, resolution, times=30):
-    mask, times = torch.ones_like(images[0:1, :, :]), np.random.randint(1, times)
+    mask = torch.ones_like(images[0:1, :, :])
     min_size, max_size, margin = np.array([0.06, 0.2, 0.02]) * resolution
 
     for _ in range(times):
@@ -57,7 +57,6 @@ def make_mask(images, resolution, times=30):
         y_start = np.random.randint(int(margin), resolution - int(margin) - height + 1)
         mask[y_start:y_start + height, x_start:x_start + width] = 0
 
-    mask = 1 - mask if random.random() < 0.5 else mask
     return mask
 
 def save_model_card(
@@ -136,7 +135,7 @@ def log_validation(
 
         images.append([])
         for _ in range(args.num_validation_images):
-            image = pipeline("a photo of sks", image=image, mask_image=mask_image, generator=generator).images[0]
+            image = pipeline("a photo of sks", image=image, mask_image=mask_image, num_inference_steps=25, generator=generator).images[0]
             images[-1].append(image)
 
     for tracker in accelerator.trackers:
@@ -666,10 +665,10 @@ def main(args):
             load_model = model_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder=sub_dir)
             load_model = PeftModel.from_pretrained(load_model, input_dir, subfolder=sub_dir)
 
-            if isinstance(model, type(accelerator.unwrap_model(text_encoder))):
-                model.config = load_model.config
+            if isinstance(model.base_model.model, type(accelerator.unwrap_model(text_encoder))):
+                model.base_model.model.config = load_model.base_model.model.config
             else:
-                model.register_to_config(**load_model.config)
+                model.base_model.model.register_to_config(**load_model.base_model.model.config)
 
             model.load_state_dict(load_model.state_dict())
             del load_model
