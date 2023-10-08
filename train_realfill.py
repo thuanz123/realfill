@@ -120,7 +120,7 @@ def log_validation(
     pipeline.unet = accelerator.unwrap_model(unet, keep_fp32_wrapper=True)
     pipeline.text_encoder = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
     pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
-    
+
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 
@@ -151,7 +151,7 @@ def log_validation(
                             wandb.Image(image, caption=str(i)) for i, image in enumerate(sub_images)
                         ]
                     }
-            )
+                )
 
     del pipeline
     torch.cuda.empty_cache()
@@ -456,7 +456,7 @@ class RealFillDataset(Dataset):
 
         self.train_images_path= list(Path(train_data_root).iterdir())
         self.num_train_images = len(self.train_images_path)
-        self.train_prompt = "a photo of sks" 
+        self.train_prompt = "a photo of sks"
         self._length = self.num_train_images
 
         self.image_transforms = transforms.Compose(
@@ -473,10 +473,10 @@ class RealFillDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        
+
         image = Image.open(self.train_images_path[index % self.num_train_images])
         image = exif_transpose(image)
-        
+
         if not image.mode == "RGB":
             image = image.convert("RGB")
         example["images"] = self.image_transforms(image)
@@ -485,9 +485,9 @@ class RealFillDataset(Dataset):
             example["masks"] = torch.ones_like(example["images"][0:1, :, :])
         else:
             example["masks"] = make_mask(example["images"], self.size)
-        
-        example["conditioning_images"] = example["images"] * (example["masks"] < 0.5) 
-        
+
+        example["conditioning_images"] = example["images"] * (example["masks"] < 0.5)
+
         train_prompt = "" if random.random() < 0.1 else self.train_prompt
         example["prompt_ids"] = self.tokenizer(
             train_prompt,
@@ -542,14 +542,14 @@ def unet_attn_processors_state_dict(unet):
 
 def main(args):
     logging_dir = Path(args.output_dir, args.logging_dir)
-    
+
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         project_dir=logging_dir,
     )
-    
+
     if args.report_to == "wandb":
         if not is_wandb_available():
             raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
@@ -653,7 +653,7 @@ def main(args):
 
                 # make sure to pop weight so that corresponding model is not saved again
                 weights.pop()
-    
+
     def load_model_hook(models, input_dir):
         while len(models) > 0:
             # pop models so that they are not loaded again
@@ -661,7 +661,7 @@ def main(args):
 
             sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else "text_encoder"
             model_cls = UNet2DConditionModel if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else CLIPTextModel
-            
+
             load_model = model_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder=sub_dir)
             load_model = PeftModel.from_pretrained(load_model, input_dir, subfolder=sub_dir)
 
@@ -672,10 +672,10 @@ def main(args):
 
             model.load_state_dict(load_model.state_dict())
             del load_model
-    
+
     accelerator.register_save_state_pre_hook(save_model_hook)
     accelerator.register_load_state_pre_hook(load_model_hook)
-    
+
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
     if args.allow_tf32:
@@ -828,7 +828,7 @@ def main(args):
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         text_encoder.train()
-            
+
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet, text_encoder):
                 # Convert images to latent space
@@ -844,7 +844,7 @@ def main(args):
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
-                
+
                 # Sample a random timestep for each image
                 timesteps = torch.randint(
                     0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
@@ -855,7 +855,7 @@ def main(args):
                 # (this is the forward diffusion process)
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-                # Concatenate noisy latents, masks and conditionings to get inputs to unet 
+                # Concatenate noisy latents, masks and conditionings to get inputs to unet
                 inputs = torch.cat([noisy_latents, masks, conditionings], dim=1)
 
                 # Get the text embedding for conditioning
@@ -874,8 +874,9 @@ def main(args):
                         unet.parameters(), text_encoder.parameters()
                     )
                     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                
+
                 optimizer.step()
+                lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=args.set_grads_to_none)
 
             # Checks if the accelerator has performed an optimization step behind the scenes
@@ -921,14 +922,14 @@ def main(args):
                             weight_dtype,
                             global_step,
                         )
-            
+
             logs = {"loss": loss.detach().item()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
 
             if global_step >= args.max_train_steps:
                 break
-        
+
     # Save the lora layers
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
@@ -936,7 +937,7 @@ def main(args):
         unwarpped_unet.save_pretrained(
             os.path.join(args.output_dir, "unet"), state_dict=accelerator.get_state_dict(unet)
         )
-        
+
         unwarpped_text_encoder = accelerator.unwrap_model(text_encoder)
         unwarpped_text_encoder.save_pretrained(
             os.path.join(args.output_dir, "text_encoder"),
