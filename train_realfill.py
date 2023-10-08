@@ -47,7 +47,8 @@ logger = get_logger(__name__)
 
 def make_mask(images, resolution, times=30):
     mask = torch.ones_like(images[0:1, :, :])
-    min_size, max_size, margin = np.array([0.06, 0.2, 0.02]) * resolution
+    min_size, max_size, margin = np.array([0.06, 0.3, 0.02]) * resolution
+    max_size = min(max_size, resolution - margin * 2)
 
     for _ in range(times):
         width = np.random.randint(int(min_size), int(max_size))
