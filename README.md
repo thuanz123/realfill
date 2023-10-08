@@ -10,17 +10,9 @@ The `train_realfill.py` script shows how to implement the training procedure for
 
 Before running the scripts, make sure to install the library's training dependencies:
 
-**Important**
-
-To make sure you can successfully run the latest versions of the example scripts, we highly recommend **installing from source** and keeping the install up to date as we update the example scripts frequently and install some example-specific requirements. To do this, execute the following steps in a new virtual environment:
+cd to the realfill folder and run
 ```bash
-git clone https://github.com/huggingface/diffusers
-cd diffusers
-pip install -e .
-```
-
-Then cd in the example folder and run
-```bash
+cd realfill
 pip install -r requirements.txt
 ```
 
@@ -47,7 +39,7 @@ When running `accelerate config`, if we specify torch compile mode to True there
 
 ### Toy example
 
-Now let's fill the real. For this example we will use some images of Brandenburg gate.
+Now let's fill the real. For this example, we will use some images of the flower girl example from the paper.
 
 We already provide some images for testing in data folder
 
