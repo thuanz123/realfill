@@ -1,7 +1,7 @@
 # RealFill (WIP)
 
-[RealFill](https://arxiv.org/abs/2309.16668) is a method to personalize text2image inpainting models like stable diffusion inpainting given just a few(3~5) images of a scene.
-The `train_realfill.py` script shows how to implement the training procedure and adapt it for stable diffusion.
+[RealFill](https://arxiv.org/abs/2309.16668) is a method to personalize text2image inpainting models like stable diffusion inpainting given just a few(1~5) images of a scene.
+The `train_realfill.py` script shows how to implement the training procedure for stable diffusion inpainting.
 
 
 ## Running locally with PyTorch
