@@ -47,7 +47,7 @@ logger = get_logger(__name__)
 
 def make_mask(images, resolution, times=30):
     mask = torch.ones_like(images[0:1, :, :])
-    min_size, max_size, margin = np.array([0.06, 0.3, 0.02]) * resolution
+    min_size, max_size, margin = np.array([0.03, 0.25, 0.01]) * resolution
     max_size = min(max_size, resolution - margin * 2)
 
     for _ in range(times):
@@ -56,8 +56,9 @@ def make_mask(images, resolution, times=30):
 
         x_start = np.random.randint(int(margin), resolution - int(margin) - width + 1)
         y_start = np.random.randint(int(margin), resolution - int(margin) - height + 1)
-        mask[y_start:y_start + height, x_start:x_start + width] = 0
+        mask[:, y_start:y_start + height, x_start:x_start + width] = 0
 
+    mask = 1 - mask if random.random() < 0.5 else mask
     return mask
 
 def save_model_card(
@@ -75,13 +76,13 @@ def save_model_card(
 ---
 license: creativeml-openrail-m
 base_model: {base_model}
-prompt: "a photo of sks" 
+prompt: "a photo of sks"
 tags:
 - stable-diffusion-inpainting
 - stable-diffusion-inpainting-diffusers
 - text-to-image
 - diffusers
-- realfill 
+- realfill
 inference: true
 ---
     """
@@ -136,7 +137,10 @@ def log_validation(
 
         images.append([])
         for _ in range(args.num_validation_images):
-            image = pipeline("a photo of sks", image=image, mask_image=mask_image, num_inference_steps=25, generator=generator).images[0]
+            image = pipeline(
+                prompt="a photo of sks", image=image, mask_image=mask_image,
+                num_inference_steps=25, guidance_scale=5, generator=generator
+            ).images[0]
             images[-1].append(image)
 
     for tracker in accelerator.trackers:
@@ -437,7 +441,7 @@ def parse_args(input_args=None):
 
 class RealFillDataset(Dataset):
     """
-    A dataset to prepare the training and conditioning images and 
+    A dataset to prepare the training and conditioning images and
     the masks with the dummy prompt for fine-tuning the model.
     It pre-processes the images, masks and tokenizes the prompts.
     """
@@ -458,7 +462,6 @@ class RealFillDataset(Dataset):
         self.train_images_path= list(Path(train_data_root).iterdir())
         self.num_train_images = len(self.train_images_path)
         self.train_prompt = "a photo of sks"
-        self._length = self.num_train_images
 
         self.image_transforms = transforms.Compose(
             [
@@ -470,12 +473,12 @@ class RealFillDataset(Dataset):
         )
 
     def __len__(self):
-        return self._length
+        return self.num_train_images
 
     def __getitem__(self, index):
         example = {}
 
-        image = Image.open(self.train_images_path[index % self.num_train_images])
+        image = Image.open(self.train_images_path[index])
         image = exif_transpose(image)
 
         if not image.mode == "RGB":
@@ -525,21 +528,6 @@ def collate_fn(examples):
         "conditioning_images": conditioning_images,
     }
     return batch
-
-def unet_attn_processors_state_dict(unet):
-    r"""
-    Returns:
-        a state dict containing just the attention processor parameters.
-    """
-    attn_processors = unet.attn_processors
-
-    attn_processors_state_dict = {}
-
-    for attn_processor_key, attn_processor in attn_processors.items():
-        for parameter_key, parameter in attn_processor.state_dict().items():
-            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
-
-    return attn_processors_state_dict
 
 def main(args):
     logging_dir = Path(args.output_dir, args.logging_dir)
@@ -929,16 +917,14 @@ def main(args):
     # Save the lora layers
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        unwarpped_unet = accelerator.unwrap_model(unet)
-        unwarpped_unet.save_pretrained(
-            os.path.join(args.output_dir, "unet"), state_dict=accelerator.get_state_dict(unet)
+        pipeline = StableDiffusionInpaintPipeline.from_pretrained(
+            args.pretrained_model_name_or_path,
+            unet=accelerator.unwrap_model(unet.merge_and_unload(), keep_fp32_wrapper=True),
+            text_encoder=accelerator.unwrap_model(text_encoder.merge_and_unload(), keep_fp32_wrapper=True),
+            revision=args.revision,
         )
 
-        unwarpped_text_encoder = accelerator.unwrap_model(text_encoder)
-        unwarpped_text_encoder.save_pretrained(
-            os.path.join(args.output_dir, "text_encoder"),
-            state_dict=accelerator.get_state_dict(text_encoder),
-        )
+        pipeline.save_pretrained(args.output_dir)
 
         # Final inference
         if args.validation_images is not None:
