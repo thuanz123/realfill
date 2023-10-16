@@ -2,7 +2,7 @@ import argparse
 import os
 
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter
 from diffusers import (
     StableDiffusionInpaintPipeline, 
     UNet2DConditionModel,
@@ -67,13 +67,21 @@ if __name__ == "__main__":
     
     image = Image.open(args.validation_image)
     mask_image = Image.open(args.validation_mask)
-    
-    images = pipe(
+
+    results = pipe(
         ["a photo of sks"] * 16, image=image, mask_image=mask_image, 
         num_inference_steps=25, guidance_scale=5, generator=generator, 
     ).images
-    for idx, image in enumerate(images):
-        image.save(f"{args.output_dir}/{idx}.png")
+
+    erode_kernel = ImageFilter.MaxFilter(3)
+    mask_image = mask_image.filter(erode_kernel)
+    
+    blur_kernel = ImageFilter.BoxBlur(1)
+    mask_image = mask_image.filter(blur_kernel)
+
+    for idx, result in enumerate(results):
+        result = Image.composite(result, image, mask_image)
+        result.save(f"{args.output_dir}/{idx}.png")
 
     del pipe
     torch.cuda.empty_cache()
