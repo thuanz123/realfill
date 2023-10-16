@@ -47,10 +47,8 @@ You only have to launch the training using:
 
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
-export TRAIN_DIR="data/flowerwoman/ref"
+export TRAIN_DIR="data/flowerwoman"
 export OUTPUT_DIR="flowerwoman-model"
-export VALIDATION_IMAGES="data/flowerwoman/target/target.png"
-export VALIDATION_MASKS="data/flowerwoman/target/mask.png"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -66,9 +64,7 @@ accelerate launch train_realfill.py \
   --max_train_steps=2000 \
   --lora_rank=8 \
   --lora_dropout=0.1 \
-  --lora_alpha=2 \
-  --validation_images=$VALIDATION_IMAGES \
-  --validation_masks=$VALIDATION_MASKS \
+  --lora_alpha=16 \
 ```
 
 ### Training on a low-memory GPU:
@@ -80,10 +76,8 @@ It is possible to run realfill on a low-memory GPU by using the following optimi
 
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-2-inpainting"
-export TRAIN_DIR="data/flowerwoman/ref"
+export TRAIN_DIR="data/flowerwoman"
 export OUTPUT_DIR="flowerwoman-model"
-export VALIDATION_IMAGES="data/flowerwoman/target/target.png"
-export VALIDATION_MASKS="data/flowerwoman/target/mask.png"
 
 accelerate launch train_realfill.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -102,9 +96,7 @@ accelerate launch train_realfill.py \
   --max_train_steps=2000 \
   --lora_rank=8 \
   --lora_dropout=0.1 \
-  --lora_alpha=2 \
-  --validation_images=$VALIDATION_IMAGES \
-  --validation_masks=$VALIDATION_MASKS \
+  --lora_alpha=16 \
 ```
 
 ### Training with gradient checkpointing and 8-bit optimizers:
