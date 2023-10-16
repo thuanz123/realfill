@@ -46,7 +46,7 @@ check_min_version("0.20.1")
 logger = get_logger(__name__)
 
 def make_mask(images, resolution, times=30):
-    mask = torch.ones_like(images[0:1, :, :])
+    mask, times = torch.ones_like(images[0:1, :, :]), np.random.randint(1, times)
     min_size, max_size, margin = np.array([0.03, 0.25, 0.01]) * resolution
     max_size = min(max_size, resolution - margin * 2)
 
@@ -128,35 +128,34 @@ def log_validation(
 
     # run inference
     generator = None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
+    
+    target_dir = Path(args.train_data_dir) / "target"
+    target_image, target_mask = target_dir / "target.png", target_dir / "mask.png"
+    image, mask_image = Image.open(target_image), Image.open(target_mask)
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
     images = []
-    for image, mask_image in zip(args.validation_images, args.validation_masks):
-        image, mask_image = Image.open(image), Image.open(mask_image)
-
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        images.append([])
-        for _ in range(args.num_validation_images):
-            image = pipeline(
-                prompt="a photo of sks", image=image, mask_image=mask_image,
-                num_inference_steps=25, guidance_scale=5, generator=generator
-            ).images[0]
-            images[-1].append(image)
+    for _ in range(args.num_validation_images):
+        image = pipeline(
+            prompt="a photo of sks", image=image, mask_image=mask_image,
+            num_inference_steps=25, guidance_scale=5, generator=generator
+        ).images[0]
+        images.append(image)
 
     for tracker in accelerator.trackers:
         if tracker.name == "tensorboard":
-            for index, sub_images in enumerate(images):
-                np_images = np.stack([np.asarray(img) for img in sub_images])
-                tracker.writer.add_images(f"validation - {index}", np_images, epoch, dataformats="NHWC")
+            np_images = np.stack([np.asarray(img) for img in images])
+            tracker.writer.add_images(f"validation", np_images, epoch, dataformats="NHWC")
         if tracker.name == "wandb":
-            for index, sub_images in enumerate(images):
-                tracker.log(
-                    {
-                        f"validation - {index}": [
-                            wandb.Image(image, caption=str(i)) for i, image in enumerate(sub_images)
-                        ]
-                    }
-                )
+            tracker.log(
+                {
+                    f"validation": [
+                        wandb.Image(image, caption=str(i)) for i, image in enumerate(images)
+                    ]
+                }
+            )
 
     del pipeline
     torch.cuda.empty_cache()
@@ -191,22 +190,6 @@ def parse_args(input_args=None):
         default=None,
         required=True,
         help="A folder containing the training data of images.",
-    )
-    parser.add_argument(
-        "--validation_images",
-        type=str,
-        required=False,
-        default=None,
-        nargs="+",
-        help="Set of conditioning images to use for validation.",
-    )
-    parser.add_argument(
-        "--validation_masks",
-        type=str,
-        required=False,
-        default=None,
-        nargs="+",
-        help="Set of masks to use for validation.",
     )
     parser.add_argument(
         "--num_validation_images",
@@ -434,9 +417,6 @@ def parse_args(input_args=None):
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
-    if args.validation_images is not None:
-        assert args.validation_masks is not None
-
     return args
 
 class RealFillDataset(Dataset):
@@ -455,11 +435,13 @@ class RealFillDataset(Dataset):
         self.size = size
         self.tokenizer = tokenizer
 
-        self.train_data_root = Path(train_data_root)
-        if not self.train_data_root.exists():
+        self.ref_data_root = Path(train_data_root) / "ref"
+        self.target_image = Path(train_data_root) / "target" / "target.png"
+        self.target_mask = Path(train_data_root) / "target" / "mask.png"
+        if not (self.ref_data_root.exists() and self.target_image.exists() and self.target_mask.exists()):
             raise ValueError("Train images root doesn't exists.")
 
-        self.train_images_path= list(Path(train_data_root).iterdir())
+        self.train_images_path = list(self.ref_data_root.iterdir()) + [self.target_image]
         self.num_train_images = len(self.train_images_path)
         self.train_prompt = "a photo of sks"
 
@@ -490,6 +472,15 @@ class RealFillDataset(Dataset):
         else:
             example["masks"] = make_mask(example["images"], self.size)
 
+        if index < len(self) - 1:
+            example["weightings"] = torch.ones_like(example["masks"])
+        else:
+            weighting = Image.open(self.target_mask)
+            weighting = exif_transpose(weighting)
+            
+            weightings = self.image_transforms(weighting)
+            example["weightings"] = weightings < 0.5
+
         example["conditioning_images"] = example["images"] * (example["masks"] < 0.5)
 
         train_prompt = "" if random.random() < 0.1 else self.train_prompt
@@ -508,6 +499,7 @@ def collate_fn(examples):
     images = [example["images"] for example in examples]
 
     masks = [example["masks"] for example in examples]
+    weightings = [example["weightings"] for example in examples]
     conditioning_images = [example["conditioning_images"] for example in examples]
 
     images = torch.stack(images)
@@ -515,6 +507,9 @@ def collate_fn(examples):
 
     masks = torch.stack(masks)
     masks = masks.to(memory_format=torch.contiguous_format).float()
+
+    weightings = torch.stack(weightings)
+    weightings = weightings.to(memory_format=torch.contiguous_format).float()
 
     conditioning_images = torch.stack(conditioning_images)
     conditioning_images = conditioning_images.to(memory_format=torch.contiguous_format).float()
@@ -525,6 +520,7 @@ def collate_fn(examples):
         "input_ids": input_ids,
         "images": images,
         "masks": masks,
+        "weightings": weightings,
         "conditioning_images": conditioning_images,
     }
     return batch
@@ -599,7 +595,7 @@ def main(args):
     config = LoraConfig(
         r=args.lora_rank,
         lora_alpha=args.lora_alpha,
-        target_modules=["to_q", "to_v", "query", "value"],
+        target_modules=["to_k", "to_q", "to_v", "key", "query", "value"],
         lora_dropout=args.lora_dropout,
         bias=args.lora_bias,
     )
@@ -608,7 +604,7 @@ def main(args):
     config = LoraConfig(
         r=args.lora_rank,
         lora_alpha=args.lora_alpha,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=["k_proj", "q_proj", "v_proj"],
         lora_dropout=args.lora_dropout,
         bias=args.lora_bias,
     )
@@ -756,8 +752,6 @@ def main(args):
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
         tracker_config = vars(copy.deepcopy(args))
-        tracker_config.pop("validation_images")
-        tracker_config.pop("validation_masks")
         accelerator.init_trackers("realfill", config=tracker_config)
 
     # Train!
@@ -825,6 +819,9 @@ def main(args):
                 masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2]
                 masks = F.interpolate(masks, size=size)
 
+                weightings = batch["weightings"].to(dtype=weight_dtype)
+                weightings = F.interpolate(weightings, size=size)
+
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
@@ -850,7 +847,7 @@ def main(args):
 
                 # Compute the diffusion loss
                 assert noise_scheduler.config.prediction_type == "epsilon"
-                loss = F.mse_loss(model_pred.float(), noise.float(), reduction="mean")
+                loss = (weightings * F.mse_loss(model_pred.float(), noise.float(), reduction="none")).mean()
 
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
@@ -896,7 +893,7 @@ def main(args):
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
-                    if args.validation_images is not None and global_step % args.validation_steps == 0:
+                    if global_step % args.validation_steps == 0:
                         log_validation(
                             text_encoder,
                             tokenizer,
@@ -927,16 +924,15 @@ def main(args):
         pipeline.save_pretrained(args.output_dir)
 
         # Final inference
-        if args.validation_images is not None:
-            images = log_validation(
-                text_encoder,
-                tokenizer,
-                unet,
-                args,
-                accelerator,
-                weight_dtype,
-                global_step,
-            )
+        images = log_validation(
+            text_encoder,
+            tokenizer,
+            unet,
+            args,
+            accelerator,
+            weight_dtype,
+            global_step,
+        )
 
         if args.push_to_hub:
             save_model_card(
