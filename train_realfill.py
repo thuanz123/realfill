@@ -127,7 +127,7 @@ def log_validation(
 
     # run inference
     generator = None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
-    
+
     target_dir = Path(args.train_data_dir) / "target"
     target_image, target_mask = target_dir / "target.png", target_dir / "mask.png"
     image, mask_image = Image.open(target_image), Image.open(target_mask)
@@ -448,7 +448,7 @@ class RealFillDataset(Dataset):
             [
                 transforms_v2.RandomResize(size, int(1.125 * size)),
                 transforms_v2.RandomCrop(size),
-                transforms_v2.ToImageTensor(), 
+                transforms_v2.ToImageTensor(),
                 transforms_v2.ConvertImageDtype(),
                 transforms_v2.Normalize([0.5], [0.5]),
             ]
@@ -467,7 +467,7 @@ class RealFillDataset(Dataset):
             image = image.convert("RGB")
 
         if index < len(self) - 1:
-            weighting = Image.new("L", image.size) 
+            weighting = Image.new("L", image.size)
         else:
             weighting = Image.open(self.target_mask)
             weighting = exif_transpose(weighting)
@@ -812,10 +812,12 @@ def main(args):
                 latents = vae.encode(batch["images"].to(dtype=weight_dtype)).latent_dist.sample()
                 latents = latents * 0.18215
 
+                # Convert masked images to latent space
                 conditionings = vae.encode(batch["conditioning_images"].to(dtype=weight_dtype)).latent_dist.sample()
                 conditionings = conditionings * 0.18215
 
-                masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2]
+                # Downsample mask and weighting so that they match with the latents
+                masks, size = batch["masks"].to(dtype=weight_dtype), latents.shape[2:]
                 masks = F.interpolate(masks, size=size)
 
                 weightings = batch["weightings"].to(dtype=weight_dtype)
@@ -848,6 +850,7 @@ def main(args):
                 assert noise_scheduler.config.prediction_type == "epsilon"
                 loss = (weightings * F.mse_loss(model_pred.float(), noise.float(), reduction="none")).mean()
 
+                # Backpropagate
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
                     params_to_clip = itertools.chain(
@@ -948,7 +951,6 @@ def main(args):
             )
 
     accelerator.end_training()
-
 
 if __name__ == "__main__":
     args = parse_args()
