@@ -12,7 +12,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
-import torchvision.transforms.v2 as transforms_v2
 import transformers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -22,7 +21,7 @@ from packaging import version
 from PIL import Image
 from PIL.ImageOps import exif_transpose
 from torch.utils.data import Dataset
-from torchvision import transforms
+import torchvision.transforms.v2 as transforms_v2
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, CLIPTextModel
 
@@ -445,12 +444,13 @@ class RealFillDataset(Dataset):
         self.num_train_images = len(self.train_images_path)
         self.train_prompt = "a photo of sks"
 
-        self.image_transforms = transforms.Compose(
+        self.transform = transforms_v2.Compose(
             [
                 transforms_v2.RandomResize(size, int(1.125 * size)),
-                transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
+                transforms_v2.RandomCrop(size),
+                transforms_v2.ToImageTensor(), 
+                transforms_v2.ConvertImageDtype(),
+                transforms_v2.Normalize([0.5], [0.5]),
             ]
         )
 
@@ -465,21 +465,20 @@ class RealFillDataset(Dataset):
 
         if not image.mode == "RGB":
             image = image.convert("RGB")
-        example["images"] = self.image_transforms(image)
+
+        if index < len(self) - 1:
+            weighting = Image.new("L", image.size) 
+        else:
+            weighting = Image.open(self.target_mask)
+            weighting = exif_transpose(weighting)
+
+        image, weighting = self.transform(image, weighting)
+        example["images"], example["weightings"] = image, weighting < 0
 
         if random.random() < 0.1:
             example["masks"] = torch.ones_like(example["images"][0:1, :, :])
         else:
             example["masks"] = make_mask(example["images"], self.size)
-
-        if index < len(self) - 1:
-            example["weightings"] = torch.ones_like(example["masks"])
-        else:
-            weighting = Image.open(self.target_mask)
-            weighting = exif_transpose(weighting)
-            
-            weightings = self.image_transforms(weighting)
-            example["weightings"] = weightings < 0.5
 
         example["conditioning_images"] = example["images"] * (example["masks"] < 0.5)
 
