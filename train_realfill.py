@@ -113,7 +113,6 @@ def log_validation(
         args.pretrained_model_name_or_path,
         tokenizer=tokenizer,
         revision=args.revision,
-        torch_dtype=weight_dtype,
     )
 
     # set `keep_fp32_wrapper` to True because we do not want to remove
