@@ -593,7 +593,7 @@ def main(args):
     config = LoraConfig(
         r=args.lora_rank,
         lora_alpha=args.lora_alpha,
-        target_modules=["to_k", "to_q", "to_v", "key", "query", "value"],
+        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
         lora_dropout=args.lora_dropout,
         bias=args.lora_bias,
     )
