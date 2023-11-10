@@ -631,7 +631,7 @@ def main(args):
     def save_model_hook(models, weights, output_dir):
         if accelerator.is_main_process:
             for model in models:
-                sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else "text_encoder"
+                sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet).base_model.model)) else "text_encoder"
                 model.save_pretrained(os.path.join(output_dir, sub_dir))
 
                 # make sure to pop weight so that corresponding model is not saved again
@@ -642,8 +642,8 @@ def main(args):
             # pop models so that they are not loaded again
             model = models.pop()
 
-            sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else "text_encoder"
-            model_cls = UNet2DConditionModel if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet.base_model.model))) else CLIPTextModel
+            sub_dir = "unet" if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet).base_model.model)) else "text_encoder"
+            model_cls = UNet2DConditionModel if isinstance(model.base_model.model, type(accelerator.unwrap_model(unet).base_model.model)) else CLIPTextModel
 
             load_model = model_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder=sub_dir)
             load_model = PeftModel.from_pretrained(load_model, input_dir, subfolder=sub_dir)
@@ -917,8 +917,8 @@ def main(args):
     if accelerator.is_main_process:
         pipeline = StableDiffusionInpaintPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
-            unet=accelerator.unwrap_model(unet.merge_and_unload(), keep_fp32_wrapper=True),
-            text_encoder=accelerator.unwrap_model(text_encoder.merge_and_unload(), keep_fp32_wrapper=True),
+            unet=accelerator.unwrap_model(une, keep_fp32_wrapper=True)t.merge_and_unload(),
+            text_encoder=accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True).merge_and_unload(),
             revision=args.revision,
         )
 
