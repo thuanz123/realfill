@@ -917,7 +917,7 @@ def main(args):
     if accelerator.is_main_process:
         pipeline = StableDiffusionInpaintPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
-            unet=accelerator.unwrap_model(une, keep_fp32_wrapper=True)t.merge_and_unload(),
+            unet=accelerator.unwrap_model(unet, keep_fp32_wrapper=True).merge_and_unload(),
             text_encoder=accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True).merge_and_unload(),
             revision=args.revision,
         )
