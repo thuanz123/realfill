@@ -30,7 +30,6 @@ from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
     StableDiffusionInpaintPipeline,
-    DPMSolverMultistepScheduler,
     UNet2DConditionModel,
 )
 from diffusers.optimization import get_scheduler
@@ -119,7 +118,7 @@ def log_validation(
     # mixed precision hooks while we are still training
     pipeline.unet = accelerator.unwrap_model(unet, keep_fp32_wrapper=True)
     pipeline.text_encoder = accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=True)
-    pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+    pipeline.scheduler = DDPMScheduler.from_config(pipeline.scheduler.config)
 
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -138,7 +137,7 @@ def log_validation(
     for _ in range(args.num_validation_images):
         image = pipeline(
             prompt="a photo of sks", image=image, mask_image=mask_image,
-            num_inference_steps=25, guidance_scale=5, generator=generator
+            num_inference_steps=200, guidance_scale=1, generator=generator
         ).images[0]
         images.append(image)
 
