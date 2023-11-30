@@ -6,7 +6,7 @@ from PIL import Image, ImageFilter
 from diffusers import (
     StableDiffusionInpaintPipeline, 
     UNet2DConditionModel,
-    DPMSolverMultistepScheduler
+    DDPMScheduler
 )
 from transformers import CLIPTextModel
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     pipe.text_encoder = CLIPTextModel.from_pretrained(
         args.model_path, subfolder="text_encoder", revision=None,
     )
-    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+    pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
     pipe = pipe.to("cuda")
 
     if args.seed is not None:
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     results = pipe(
         ["a photo of sks"] * 16, image=image, mask_image=mask_image, 
-        num_inference_steps=25, guidance_scale=5, generator=generator, 
+        num_inference_steps=200, guidance_scale=1, generator=generator, 
     ).images
 
     erode_kernel = ImageFilter.MaxFilter(3)
