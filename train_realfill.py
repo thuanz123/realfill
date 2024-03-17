@@ -7,6 +7,8 @@ import math
 import os
 import shutil
 from pathlib import Path
+import pdb
+
 
 import numpy as np
 import torch
@@ -458,11 +460,12 @@ class RealFillDataset(Dataset):
     def __getitem__(self, index):
         example = {}
 
-        image = Image.open(self.train_images_path[index])
+        image = Image.open(self.train_images_path[index]).convert("RGB")
         image = exif_transpose(image)
 
-        if not image.mode == "RGB":
-            image = image.convert("RGB")
+        # if not image.mode == "RGB":
+            # image = image.convert("RGB")
+        # image = image.convert("RGB")
 
         if index < len(self) - 1:
             weighting = Image.new("L", image.size)
@@ -492,6 +495,7 @@ class RealFillDataset(Dataset):
         return example
 
 def collate_fn(examples):
+    
     input_ids = [example["prompt_ids"] for example in examples]
     images = [example["images"] for example in examples]
 
@@ -504,7 +508,7 @@ def collate_fn(examples):
 
     masks = torch.stack(masks)
     masks = masks.to(memory_format=torch.contiguous_format).float()
-
+    # breakpoint()
     weightings = torch.stack(weightings)
     weightings = weightings.to(memory_format=torch.contiguous_format).float()
 
@@ -697,6 +701,8 @@ def main(args):
         tokenizer=tokenizer,
         size=args.resolution,
     )
+    
+    # pdb.set_trace()
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -806,7 +812,7 @@ def main(args):
 
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet, text_encoder):
-                # Convert images to latent space
+		# Convert images to latent space
                 latents = vae.encode(batch["images"].to(dtype=weight_dtype)).latent_dist.sample()
                 latents = latents * 0.18215
 
