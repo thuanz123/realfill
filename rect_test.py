@@ -6,30 +6,43 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
+# from transformers import Owlv2Processor, Owlv2ForObjectDetection
 import math
+
+# processor = Owlv2Processor.from_pretrained("google/owlv2-large-patch14-finetuned")
+# model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-large-patch14-finetuned")
+
+
 
 def rescale_rects(rects, scaling_factor, image_height, image_width):
     n = len(rects)
     n_width = math.ceil(math.sqrt(n))
     n_height = round(math.sqrt(n))
-    predicted_image_width = scaling_factor*np.max(np.array([x['width'] for x in sorted(rects, key = lambda x: x['width'], reverse = True)[:n_width]]))
-    predicted_image_height = scaling_factor*np.max(np.array([x['height'] for x in sorted(rects, key = lambda x: x['height'], reverse = True)[:n_height]]))
+    predicted_image_width = scaling_factor*np.sum(np.array([x['width'] for x in sorted(rects, key = lambda x: x['width'], reverse = True)[:n_width]]))
+    predicted_image_height = scaling_factor*np.sum(np.array([x['height'] for x in sorted(rects, key = lambda x: x['height'], reverse = True)[:n_height]]))
     width_factor = image_width/predicted_image_width
     height_factor = image_height/predicted_image_height
     
     # print(predicted_image_width)
-    print(predicted_image_height)
+    # print(predicted_image_height)
     # print(width_factor)
-    print(height_factor)
+    # print(height_factor)
     # print(rects)
     # Resize rects
     rects_resize = []
     for idx, rect in enumerate(rects):
         aspect_ratio = rect['width']/rect['height']
-        width_new = rect['width']*width_factor*aspect_ratio    
-        height_new = rect['height']*height_factor/aspect_ratio
-        
-        f_aspect_ratio = (width_new/rect['width'])*(rect['height']/height_new)
+        print(aspect_ratio)
+        width_new = rect['width']*width_factor
+        height_new = rect['height']*height_factor
+        aspect_ratio_new = width_new/height_new
+        print(width_new/height_new)
+        c_ar = aspect_ratio/aspect_ratio_new
+        if c_ar > 0:
+            height_new /= c_ar
+        else:
+            width_new *= c_ar
+        # f_aspect_ratio = (width_new/rect['width'])*(rect['height']/height_new)
         # print(f_aspect_ratio)
         # width_final = (f_aspect_ratio*rect['width'])/(rect['height']/height_new)
         width_final = width_new
@@ -51,34 +64,35 @@ def pack_rows(rects, scaling_factor = 1, image_height = 700, image_width = 700, 
     print(rects)
     xpos = 0
     ypos = 0
-    dx = 0
-    dy = 0
     largest_h_this_row = 0
 
     rects_new = []
     # print(rects)
     for rect in rects:
         rect_new = Rect(rect['x'], rect['y'], rect['height'], rect['width'])
-        rect_new['x'] = int(round(xpos) + (dx - rect_new['width'])/2)
-        rect_new['y'] = int(round(ypos) + (dy - rect_new['height'])/2)
         dx = rect['width']*scaling_factor
         dy = rect['height']*scaling_factor
+        
+        # dy = 0
         # dx = rect['width']
         # dy = rect['height']
-        print(dx)
-        print(dy)
+        # print(dx)
+        # print(dy)
+        # print(rect_new)
+        rect_new['x'] = int(round(xpos) + (dx - rect_new['width'])/2)
+        rect_new['y'] = int(round(ypos) + (dy - rect_new['height'])/2)
+        rect_new['was_packed'] = True
+        # print(rect_new)
+        rects_new.append(rect_new)
         if xpos + dx > image_width:
             ypos += largest_h_this_row
             xpos = 0
             largest_h_this_row = 0
-        if ypos + dy > image_height:
-            break
         xpos += dx
-
         if rect['height'] >= largest_h_this_row:
             largest_h_this_row = rect['height']*scaling_factor
-        rect_new['was_packed'] = True
-        rects_new.append(rect_new)
+        # if ypos + dy > image_height:
+        #     break
     print(rects_new)
     return(rects_new)
 
@@ -135,15 +149,15 @@ def generate_layout(images, method = 'rows', image_height = 1000, image_width = 
     trans = transforms.Compose([transforms.ToTensor()])
     tensors = [trans(im) for im in images]
     sizes = [tuple(x.size()[1:]) for x in tensors]
-    rects = [Rect(0,0,sz[0],sz[1]) for sz in sizes]
+    image_rects = [Rect(0,0,sz[0],sz[1]) for sz in sizes]
     # print(rects)
     if method == 'rows':
-        rects = pack_rows(rects=rects, scaling_factor = scaling_factor, 
+        rects = pack_rows(rects=image_rects, scaling_factor = scaling_factor, 
                           image_height = image_height, 
                           image_width = image_width,
                           order_by_height = order_by_height)
     elif method == 'circle':
-        rects = pack_circle(rects=rects, scaling_factor = scaling_factor, 
+        rects = pack_circle(rects=image_rects, scaling_factor = scaling_factor, 
                             image_height = image_height, 
                             image_width = image_width)
     else:
@@ -160,7 +174,8 @@ def layout_and_mask(images_path = '/home/feshap/src/realfill/data/noam_photos/Ph
 
 # Make layout according to constraints of input images and target image size
     images, paths = get_images(images_path)
-    
+
+
     rects = generate_layout(images, 
                         method = method,
                         image_height = image_height, 
