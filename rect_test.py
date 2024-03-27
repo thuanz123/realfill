@@ -6,12 +6,10 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
-# from transformers import Owlv2Processor, Owlv2ForObjectDetection
+from transformers import Owlv2Processor, Owlv2ForObjectDetection, DetrImageProcessor, DetrForObjectDetection
 import math
-
-# processor = Owlv2Processor.from_pretrained("google/owlv2-large-patch14-finetuned")
-# model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-large-patch14-finetuned")
-
+from importlib import reload
+import sys
 
 
 def rescale_rects(rects, scaling_factor, image_height, image_width):
@@ -124,6 +122,26 @@ def get_images(image_folder_path):
     images = [Image.open(path).convert("RGB") for path in train_image_paths]
     return([images, train_image_paths])
 
+def detect_objects(images, texts = None, detector = 'detr'):
+    if detector == 'owl':
+        processor = Owlv2Processor.from_pretrained("google/owlv2-base-patch16-ensemble")
+        model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-base-patch16-ensemble")
+        results = []
+        for img,txt in zip(images, texts):
+            inputs = processor(text=txt, images=img, return_tensors="pt")
+            outputs = model(**inputs)
+            target_sizes = torch.tensor([img.size[::-1]])
+            results.append(processor.post_process_object_detection(outputs, target_sizes=target_sizes, threshold=0.1))
+    elif detector == 'detr':    
+        processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-101", revision="no_timm")
+        model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-101", revision="no_timm")
+        inputs = processor(images=images, return_tensors="pt")
+        target_sizes = torch.tensor([im.size[::-1] for im in images])
+        results = processor.post_process_object_detection(outputs, target_sizes=target_sizes, threshold=0.9)
+    else:
+        raise ValueError('detector must be "owl" or "detr"')
+    return(results)
+
 class Rect:
     """
     A class representing a rectangle
@@ -145,7 +163,7 @@ class Rect:
     def __repr__(self):
         return f"x: {self.x}, y: {self.y}, height: {self.height}, width: {self.width}, was_packed: {self.was_packed}" 
 
-def generate_layout(images, method = 'rows', image_height = 1000, image_width = 1000, scaling_factor = 1, order_by_height = False):
+def generate_layout(images, method = 'rows', image_height = 1000, image_width = 1000, scaling_factor = 1, order_by_height = False, objects = None):
     trans = transforms.Compose([transforms.ToTensor()])
     tensors = [trans(im) for im in images]
     sizes = [tuple(x.size()[1:]) for x in tensors]
@@ -162,7 +180,17 @@ def generate_layout(images, method = 'rows', image_height = 1000, image_width = 
                             image_width = image_width)
     else:
         sys.exit('method must be either "rows" (default) or "circle"')
-    return(rects)
+    if objects is not None:
+        new_rects = []
+        for rect, object in zip(rects, objects):
+            new_rect = Rect(rect['x'] + object['x'], 
+                            rect['y'] + object['y'], 
+                            object['height'], 
+                            object['width'])
+        new_rects.append(new_rect)
+        return(new_rects)
+    else:
+        return(rects)
     
 
 def layout_and_mask(images_path = '/home/feshap/src/realfill/data/noam_photos/Photos-001', 
@@ -170,21 +198,27 @@ def layout_and_mask(images_path = '/home/feshap/src/realfill/data/noam_photos/Ph
                     scaling_factor = 1.2,
                     image_height = 1000, 
                     image_width = 1000,
-                    order_by_height = False):
+                    order_by_height = False, 
+                    detect_objects_in_images = False,
+                    text_descriptions = None,
+                    detector = 'detr'):
 
 # Make layout according to constraints of input images and target image size
     images, paths = get_images(images_path)
-
+    
+    if detect_objects_in_images == True:
+        objects = detect_objects(images, text_descriptions, detector)
 
     rects = generate_layout(images, 
                         method = method,
                         image_height = image_height, 
                         image_width = image_width, 
                         scaling_factor = scaling_factor,
-                        order_by_height = order_by_height)
+                        order_by_height = order_by_height,
+                        objects = objects)
 
-    for rect in rects:
-        print(rect)
+    # for rect in rects:
+    #     print(rect)
 # Make mask and resize images
     mask_tns = torch.ones(1,image_height,image_width)
     for rect, img, path in zip(rects, images, paths):
@@ -194,6 +228,22 @@ def layout_and_mask(images_path = '/home/feshap/src/realfill/data/noam_photos/Ph
         img_rsz.save(path_edit)
     mask_img = transforms.functional.to_pil_image(mask_tns, mode = 'L')
     mask_img.save(Path(images_path) / 'target/mask.png')
+
+
+def print_detection_results(results, model=None):
+    if model is None:
+        raise ValueError(''.join(['Load models with either\n',
+            'model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-large-patch14-finetuned")\nor\n',
+            'model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-101", revision="no_timm"']))
+    for index, result in enumerate(results):
+        print(index)
+        for score, label, box in zip(result["scores"], result["labels"], result["boxes"]):
+            box = [round(i, 2) for i in box.tolist()]
+            print(
+                f"Detected {model.config.id2label[label.item()]} with confidence "
+                f"{round(score.item(), 3)} at location {box}"
+            )
+
 
 
 def make_error_boxes(ax, xdata, ydata, xerror, yerror, facecolor='r',
