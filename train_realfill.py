@@ -436,7 +436,7 @@ class RealFillDataset(Dataset):
         self.target_image = Path(train_data_root) / "target" / "target.png"
         self.target_mask = Path(train_data_root) / "target" / "mask.png"
         if not (self.ref_data_root.exists() and self.target_image.exists() and self.target_mask.exists()):
-            raise ValueError("Train images root doesn't exists.")
+            raise ValueError("Train images root doesn't exist.")
 
         self.train_images_path = list(self.ref_data_root.iterdir()) + [self.target_image]
         self.num_train_images = len(self.train_images_path)
