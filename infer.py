@@ -78,7 +78,7 @@ if __name__ == "__main__":
         result = pipe(
             prompt="a photo of sks", image=image, mask_image=mask_image, 
             num_inference_steps=200, guidance_scale=1, generator=generator, 
-        ).images
+        ).images[0]
         
         result = Image.composite(result, image, mask_image)
         result.save(f"{args.output_dir}/{idx}.png")
