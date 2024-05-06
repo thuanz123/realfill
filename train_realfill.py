@@ -471,10 +471,12 @@ class RealFillDataset(Dataset):
             weighting = exif_transpose(weighting)
 
         image, weighting = self.transform(image, weighting)
-        example["images"], example["weightings"] = image, weighting < 0
+        example["images"], example["weightings"] = image, weighting[0:1] < 0
 
-        if random.random() < 0.1:
-            example["masks"] = torch.ones_like(example["images"][0:1, :, :])
+        if index == len(self) - 1:
+            example["masks"] = 1 - (example["weightings"]).float()
+        elif random.random() < 0.1:
+            example["masks"] = torch.ones_like(example["images"][0:1])
         else:
             example["masks"] = make_mask(example["images"], self.size)
 
