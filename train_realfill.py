@@ -591,23 +591,23 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
 
-    config = LoraConfig(
+    unet_config = LoraConfig(
         r=args.lora_rank,
         lora_alpha=args.lora_alpha,
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
         lora_dropout=args.lora_dropout,
         bias=args.lora_bias,
     )
-    unet = get_peft_model(unet, config)
+    unet = get_peft_model(unet, unet_config)
 
-    config = LoraConfig(
+    text_encoder_config = LoraConfig(
         r=args.lora_rank,
         lora_alpha=args.lora_alpha,
-        target_modules=["k_proj", "q_proj", "v_proj"],
+        target_modules=["k_proj", "q_proj", "v_proj", "out_proj"],
         lora_dropout=args.lora_dropout,
         bias=args.lora_bias,
     )
-    text_encoder = get_peft_model(text_encoder, config)
+    text_encoder = get_peft_model(text_encoder, text_encoder_config)
 
     vae.requires_grad_(False)
 
