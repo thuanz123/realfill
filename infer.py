@@ -68,18 +68,18 @@ if __name__ == "__main__":
     image = Image.open(args.validation_image)
     mask_image = Image.open(args.validation_mask)
 
-    results = pipe(
-        ["a photo of sks"] * 16, image=image, mask_image=mask_image, 
-        num_inference_steps=200, guidance_scale=1, generator=generator, 
-    ).images
-
     erode_kernel = ImageFilter.MaxFilter(3)
     mask_image = mask_image.filter(erode_kernel)
-    
+
     blur_kernel = ImageFilter.BoxBlur(1)
     mask_image = mask_image.filter(blur_kernel)
 
-    for idx, result in enumerate(results):
+    for idx in range(16):
+        result = pipe(
+            prompt="a photo of sks", image=image, mask_image=mask_image, 
+            num_inference_steps=200, guidance_scale=1, generator=generator, 
+        ).images
+        
         result = Image.composite(result, image, mask_image)
         result.save(f"{args.output_dir}/{idx}.png")
 
