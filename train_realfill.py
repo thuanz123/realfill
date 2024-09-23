@@ -470,7 +470,7 @@ class RealFillDataset(Dataset):
             weighting = Image.open(self.target_mask)
             weighting = exif_transpose(weighting)
 
-        image, weighting = self.transform(image, weighting)
+        image, weighting = self.transform(image, weighting) # The range of weighting becomes [-1, 1] after self.transform
         example["images"], example["weightings"] = image, weighting[0:1] < 0
 
         if index == len(self) - 1:
