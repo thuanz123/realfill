@@ -94,6 +94,7 @@ You can find some example images in the following. \n
     with open(os.path.join(repo_folder, "README.md"), "w") as f:
         f.write(yaml + model_card)
 
+@torch.no_grad()
 def log_validation(
     text_encoder,
     tokenizer,
@@ -896,6 +897,9 @@ def main(args):
                         logger.info(f"Saved state to {save_path}")
 
                     if global_step % args.validation_steps == 0:
+                        unet.eval()
+                        text_encoder.eval()
+                        
                         log_validation(
                             text_encoder,
                             tokenizer,
