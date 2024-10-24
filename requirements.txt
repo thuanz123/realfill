@@ -2,6 +2,7 @@ diffusers==0.20.1
 accelerate==0.23.0
 transformers==4.36.0
 peft==0.5.0
+huggingface-hub==0.25.2
 torch==2.0.1
 torchvision==0.15.2
 ftfy==6.1.1
